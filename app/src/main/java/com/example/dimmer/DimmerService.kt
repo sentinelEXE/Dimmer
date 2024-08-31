@@ -27,7 +27,6 @@ class DimmerService : Service() {
 
     private var overlayView: View? = null
     private lateinit var notificationManager: NotificationManager
-    private var currentDimLevel: Int = 50
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
@@ -50,13 +49,13 @@ class DimmerService : Service() {
                 SET_DIM_LEVEL -> {
                     val dimLevel = it.getIntExtra(DIM_LEVEL_EXTRA, 50)
 
-                    updateDimmingLevel(dimLevel) // Update the dimming level
-                    updateNotification(dimLevel) // Optionally update the notification
+                    updateDimmingLevel(dimLevel)
+                    updateNotification(dimLevel)
                 }
                 ACTION_STOP_DIMMER -> {
-                    removeOverlayView() // Your method to remove the semi-transparent view
-                    stopForeground(true) // Stop the foreground service and remove the notification
-                    stopSelf() // Stop the service
+                    removeOverlayView()
+                    stopForeground(true)
+                    stopSelf()
                 }
             }
         }
@@ -89,7 +88,6 @@ class DimmerService : Service() {
             setBackgroundColor(Color.argb(128, 0, 0, 0))  // Adjust alpha for dimming level
         }
         overlayView!!.setOnApplyWindowInsetsListener { _, insets ->
-            // Adjust the overlay based on the insets (cutout/notch)
             insets
         }
 
@@ -141,7 +139,6 @@ class DimmerService : Service() {
             .setOngoing(true)
             .addAction(R.drawable.ic_dimmer, "Stop", createRemoveIntent())
         addDimLevelIntentActions(notification, dimLevel)
-        currentDimLevel = dimLevel
         return notification.build()
     }
 
