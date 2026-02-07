@@ -75,9 +75,7 @@ class DimmerService : Service() {
 
         // Ensure we cover the "notch" or "hole punch" area at the top
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-          layoutParams.fitInsetsTypes = 0
-            layoutParams.layoutInDisplayCutoutMode = 
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            layoutParams.fitInsetsTypes = 0
         }
 
         // This ensures the view starts at the absolute (0,0) of the physical screen
