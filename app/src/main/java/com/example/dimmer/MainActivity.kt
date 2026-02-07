@@ -1,10 +1,6 @@
 package com.example.dimmer
 
 import android.Manifest
-import android.app.ActivityManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,89 +8,79 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
-import android.view.ViewTreeObserver
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
-    private val overlayPermissionRequestCode = 1001
-    private val notificationPermissionRequestCode = 1002
+
+    // 1. Use the modern Register API correctly
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        if (Settings.canDrawOverlays(this)) {
+            checkNotificationAndStart()
+        } else {
+            Toast.makeText(this, "Overlay permission required!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startStopService()
+        }
+        finish() 
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
         if (arePermissionsGranted()) {
             startStopService()
             finish()
         } else {
-            requestNecessaryPermissions()
+            handlePermissionsFlow()
         }
     }
 
-    private fun requestNecessaryPermissions() {
+    private fun handlePermissionsFlow() {
         if (!Settings.canDrawOverlays(this)) {
-            requestOverlayPermission()
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            overlayPermissionLauncher.launch(intent)
+        } else {
+            checkNotificationAndStart()
         }
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestNotificationPermission()
-        }
     }
 
-    private fun requestOverlayPermission() {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-        startActivityForResult(intent, overlayPermissionRequestCode)
-    }
-
-    private fun requestNotificationPermission() {
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notificationPermissionRequestCode)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == overlayPermissionRequestCode) {
-            if (Settings.canDrawOverlays(this)) {
-                requestNotificationPermission()
-            } else {
-                Toast.makeText(this, "Overlay permission not granted", Toast.LENGTH_SHORT).show()
-                finish()
+    private fun checkNotificationAndStart() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
             }
         }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == notificationPermissionRequestCode) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startStopService()
-            } else {
-                Toast.makeText(this, "Notification permission not granted", Toast.LENGTH_SHORT).show()
-            }
-            finish()
-        }
+        startStopService()
+        finish()
     }
 
     private fun arePermissionsGranted(): Boolean {
-        return Settings.canDrawOverlays(this) && (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        val overlayOk = Settings.canDrawOverlays(this)
+        val notifyOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else true
+        return overlayOk && notifyOk
     }
 
     private fun startStopService() {
         val serviceIntent = Intent(this, DimmerService::class.java)
-        if (isServiceRunning(DimmerService::class.java)) {
-            stopService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
-    }
-
-    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.getRunningServices(Integer.MAX_VALUE).any { it.service.className == serviceClass.name }
+        // Note: For a Dimmer app, you're better off sending a Command to the service
+        // rather than checking if it's running.
+        startService(serviceIntent)
     }
 }
